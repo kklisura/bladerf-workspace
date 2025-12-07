@@ -13,6 +13,3 @@
 [submodule "gnuradio"]
 	path = gnuradio
 	url = git@github.com:gnuradio/gnuradio.git
-[submodule "volk"]
-	path = volk
-	url = git@github.com:gnuradio/volk.git
