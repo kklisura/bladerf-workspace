@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bde2b8d..72cde85 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -71,7 +71,7 @@ endif()
+ ########################################################################
+ # Find boost
+ ########################################################################
+-find_package(Boost "1.65" REQUIRED system)
++find_package(Boost "1.65")
+ 
+ if(NOT Boost_FOUND)
+     message(FATAL_ERROR "Boost required to compile iqbalance")
