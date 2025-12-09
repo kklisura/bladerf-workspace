@@ -8,6 +8,7 @@ BLADERF_SOURCE_DIR=$CURRENT_DIR/bladeRF/
 GR_IQBAL_SOURCE_DIR=$CURRENT_DIR/gr-iqbal/
 GR_OSMOSDR_SOURCE_DIR=$CURRENT_DIR/gr-osmosdr/
 GR_BLADERF_SOURCE_DIR=$CURRENT_DIR/gr-bladeRF/
+URH_SOURCE_DIR=$CURRENT_DIR/urh/
 
 PATCHES_DIR=$CURRENT_DIR/patches/
 OUTPUT_DIR=$CURRENT_DIR/output/
@@ -370,6 +371,84 @@ build_bladerf_gnuradio_blocks() {
   build_gr_bladerf
 }
 
+build_urh() {
+  echo "Building urh (Universal Radio Hacker)..."
+
+  cd "$URH_SOURCE_DIR"
+
+  echo "  Installing python dependencies..."
+
+  # The list of dependencies taken from https://github.com/jopohl/urh/blob/master/data/requirements.txt
+  local python_deps
+  python_deps=(
+    pyqt5
+    psutil
+    cython
+    setuptools
+  )
+
+  for pkg in "${python_deps[@]}"; do
+    if python3 -c "import $pkg" >/dev/null 2>&1; then
+      echo "    - $pkg already installed"
+    else
+      echo "    - Installing $pkg..."
+      pip install --quiet "$pkg" >/dev/null 2>&1
+    fi
+  done
+
+  echo "  Building..."
+
+  rm -rf build/
+  rm -rf var/
+
+  # Although nothing should reside here, let's just recreate it
+  rm -rf src/urh/dev/native/lib/shared
+  mkdir src/urh/dev/native/lib/shared/
+  ln -s "$OUTPUT_DIR"/lib/* src/urh/dev/native/lib/shared/
+  ln -s "$OUTPUT_DIR/include" src/urh/dev/native/lib/shared/include
+
+  # Clean any previously generated cpp files
+  rm src/urh/dev/native/lib/*.cpp
+
+  DYLD_LIBRARY_PATH="$OUTPUT_DIR/lib" python setup.py --quiet install
+}
+
+ensure_brew() {
+  echo "Ensuring Homebrew is installed..."
+
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "  Homebrew is NOT installed or not in PATH"
+    exit 1
+  fi
+
+  # Check brew accessibility and version
+  if ! brew --version >/dev/null 2>&1; then
+    echo "  'brew' command exists but cannot be executed properly"
+    exit 1
+  fi
+
+  echo "  Homebrew found: $(brew --version | head -n1)"
+  return 0
+}
+
+ensure_git() {
+  echo "Ensuring Git is installed..."
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "  Git is NOT installed or not in PATH"
+    exit 1
+  fi
+
+  # Check git accessibility and version
+  if ! git --version >/dev/null 2>&1; then
+    echo "  'git' command exists but cannot be executed properly"
+    exit 1
+  fi
+
+  echo "  Git found: $(git --version)"
+  return 0
+}
+
 ensure_python() {
   echo "Ensuring Python is available via virtualenv..."
 
@@ -416,11 +495,14 @@ clean_output_dir() {
 }
 
 main() {
+  ensure_git
+  ensure_brew
   ensure_python
   clean_output_dir
   build_gnu_radio
   build_bladerf_cli
   build_bladerf_gnuradio_blocks
+  build_urh
 }
 
 main "$@"

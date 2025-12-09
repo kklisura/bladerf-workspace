@@ -1,0 +1,10 @@
+
+if [ "${BASH_SOURCE-}" = "$0" ]; then
+    echo "You must source this script: \$ source $0" >&2
+    exit 33
+fi
+
+current_dir=$(pwd)
+
+export PATH="$current_dir/output/bin:$PATH"
+source python3.14/bin/activate
