@@ -1,0 +1,114 @@
+diff --git a/src/urh/dev/native/ExtensionHelper.py b/src/urh/dev/native/ExtensionHelper.py
+index ab32273b..9a76fea8 100644
+--- a/src/urh/dev/native/ExtensionHelper.py
++++ b/src/urh/dev/native/ExtensionHelper.py
+@@ -71,6 +71,8 @@ def compiler_has_function(
+                 f.write("    %s();\n" % function_name)
+                 f.write("}\n")
+ 
++            extra_preargs = [f"-Wl,-rpath,{lib}" for lib in library_dirs]
++
+             # Redirect stderr to /dev/null to hide any error messages from the compiler.
+             devnull = open(os.devnull, "w")
+             old_stderr = os.dup(sys.stderr.fileno())
+@@ -81,6 +83,7 @@ def compiler_has_function(
+                 os.path.join(tmp_dir, "a.out"),
+                 library_dirs=library_dirs,
+                 libraries=libraries,
++                extra_preargs=extra_preargs
+             )
+         except Exception as e:
+             return False
+@@ -103,6 +106,8 @@ def check_api_version(
+             with open(file_name, "w") as f:
+                 f.write(api_version_code)
+ 
++            extra_preargs = [f"-Wl,-rpath,{lib}" for lib in library_dirs]
++
+             objects = compiler.compile([file_name], include_dirs=include_dirs)
+             check_api_program = os.path.join(tmp_dir, "check_api")
+             compiler.link_executable(
+@@ -110,6 +115,7 @@ def check_api_version(
+                 check_api_program,
+                 library_dirs=library_dirs,
+                 libraries=libraries,
++                extra_preargs=extra_preargs
+             )
+ 
+             env = os.environ.copy()
+@@ -172,6 +178,11 @@ def get_device_extensions_and_extras(library_dirs=None, include_dirs=None):
+ 
+     compiler = ccompiler.new_compiler()
+     for dev_name, params in DEVICES.items():
++        envvar = dev_name.upper()
++
++        dev_related_include_dirs = os.environ.get(f"{envvar}_INCDIR", "").split(":")
++        dev_related_library_dirs = os.environ.get(f"{envvar}_LIBDIR", "").split(":")
++
+         if build_device_extensions[dev_name] == 0:
+             print("Skipping native {0} support".format(dev_name))
+             continue
+@@ -182,8 +193,8 @@ def get_device_extensions_and_extras(library_dirs=None, include_dirs=None):
+             compiler,
+             params["test_function"],
+             (params["lib"],),
+-            library_dirs,
+-            include_dirs,
++            dev_related_library_dirs + library_dirs,
++            dev_related_include_dirs + include_dirs,
+         ):
+             print(
+                 "Found {0} lib. Will compile with native {1} support".format(
+@@ -196,7 +207,7 @@ def get_device_extensions_and_extras(library_dirs=None, include_dirs=None):
+ 
+         device_extras.update(
+             get_device_extras(
+-                compiler, dev_name, [params["lib"]], library_dirs, include_dirs
++                compiler, dev_name, [params["lib"]], dev_related_library_dirs + library_dirs, dev_related_include_dirs + include_dirs
+             )
+         )
+         if "api_version_check_code" in params:
+@@ -225,14 +236,14 @@ def get_device_extensions_and_extras(library_dirs=None, include_dirs=None):
+                     compiler,
+                     params["api_version_check_code"],
+                     (params["lib"],),
+-                    library_dirs,
+-                    include_dirs,
++                    dev_related_library_dirs + library_dirs,
++                    dev_related_include_dirs + include_dirs,
+                 )
+             device_extras[env_name] = ver
+             print("    Using {}={}".format(env_name, ver))
+ 
+         extension = get_device_extension(
+-            dev_name, [params["lib"]], library_dirs, include_dirs
++            dev_name, [params["lib"]], dev_related_library_dirs + library_dirs, dev_related_include_dirs + include_dirs
+         )
+         result.append(extension)
+ 
+@@ -247,9 +258,13 @@ def get_device_extras(compiler, dev_name, libraries, library_dirs, include_dirs)
+ 
+     result = dict()
+ 
++    envvar = dev_name.upper()
++    dev_related_include_dirs = os.environ.get(f"{envvar}_INCDIR", "").split(":")
++    dev_related_library_dirs = os.environ.get(f"{envvar}_LIBDIR", "").split(":")
++
+     for extra, func_name in extras.items():
+         if compiler_has_function(
+-            compiler, func_name, libraries, library_dirs, include_dirs
++            compiler, func_name, libraries, dev_related_library_dirs + library_dirs, dev_related_include_dirs + include_dirs
+         ):
+             result[extra] = 1
+         else:
+@@ -279,8 +294,9 @@ def get_device_extension(
+         [cpp_file_path],
+         libraries=libraries,
+         library_dirs=library_dirs,
+-        include_dirs=include_dirs,
++        include_dirs= include_dirs,
+         language=language,
++        extra_link_args=[f"-Wl,-rpath,{lib}" for lib in library_dirs]
+     )
+ 
+ 

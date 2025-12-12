@@ -4,7 +4,19 @@ if [ "${BASH_SOURCE-}" = "$0" ]; then
     exit 33
 fi
 
-current_dir=$(pwd)
+# Use script directory, not pwd (pwd depends on where you run from)
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-export PATH="$current_dir/output/bin:$PATH"
-source python3.14/bin/activate
+# Save old PATH so we can restore it (unique var name)
+export _OLD_BLADERF_WORKSPACE_PATH="$PATH"
+
+# Activate venv (this will touch PATH)
+source "$script_dir/python3.14/bin/activate"
+
+# Now prepend your binaries so they win
+export PATH="$script_dir/output/bin:$PATH"
+
+# The hash command must be called to get it to forget past
+# commands. Without forgetting past commands the $PATH changes
+# we made may not be respected
+hash -r 2>/dev/null || true

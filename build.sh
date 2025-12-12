@@ -1,4 +1,5 @@
 #/bin/bash
+set -e
 
 CURRENT_DIR=$(pwd)
 
@@ -14,13 +15,15 @@ PATCHES_DIR=$CURRENT_DIR/patches/
 OUTPUT_DIR=$CURRENT_DIR/output/
 
 # Additional arguments passed to GENERATE, BUILD and INSTALL phase
-#  -Wno-dev - disables some dev warnings
 #  --log-level=ERROR - increases log level threshold
 #  -DCMAKE_RULE_MESSAGES=OFF - disables some messages
 #  -DCMAKE_INSTALL_MESSAGE=NEVER - disables install/up-to-date based messages
-#  -DGL_SILENCE_DEPRECATION - silence OpenGL deprecations
-#  -Wdeprecated-declarations - generally disable deprecation warnings
-CMAKE_GENERATE_ADDITIONAL_ARGS="-DCMAKE_INSTALL_MESSAGE=NEVER -DCMAKE_RULE_MESSAGES=OFF -DGL_SILENCE_DEPRECATION -Wdeprecated-declarations -Wno-dev --log-level=ERROR"
+#  GL_SILENCE_DEPRECATION - silence OpenGL deprecations
+CMAKE_GENERATE_ADDITIONAL_ARGS="-DCMAKE_INSTALL_MESSAGE=NEVER \
+                                -DCMAKE_RULE_MESSAGES=OFF \
+                                -DCMAKE_C_FLAGS_INIT=\"-DGL_SILENCE_DEPRECATION\" \
+                                -DCMAKE_CXX_FLAGS_INIT=\"-DGL_SILENCE_DEPRECATION\"
+                                --log-level=ERROR"
 CMAKE_BUILD_ADDITIONAL_ARGS="-- --silent"
 
 apply_patches() {
@@ -86,6 +89,7 @@ build_gnu_radio() {
     uhd
     volk
     zeromq
+    pybind11
   )
 
   echo "  Installing dependencies..."
@@ -130,9 +134,11 @@ build_gnu_radio() {
   local python_executable
   python_site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
   python_executable=$(which python)
-  
-  # NOTE: We need this, so we can reuse the pyqt@5 libraries
-  echo "/opt/homebrew/lib/python3.14/site-packages" > "$site_dir/pyqt5-brew.pth"
+  external_site_packages=$(/opt/homebrew/opt/python@3.14/bin/python3.14 -c "import site; print(site.getsitepackages()[0])")
+
+  # NOTE: We need this, so we can reuse the pyqt@5, gi from brew
+  echo "$external_site_packages" > "$python_site_packages/pyqt5-brew.pth"
+  echo "$external_site_packages" > "$python_site_packages/gi-brew.pth"
 
   local qwt_qt5_dir
   local qt5_dir
@@ -141,6 +147,9 @@ build_gnu_radio() {
 
   echo "  Generating build..."
   cmake -S . -B build $CMAKE_GENERATE_ADDITIONAL_ARGS \
+    -Wno-dev \
+    -Wno-deprecated-declarations \
+    -Wno-unused-parameter \
     -DENABLE_GNURADIO_RUNTIME=ON \
     -DENABLE_GRC=ON \
     -DENABLE_PYTHON=ON \
@@ -193,6 +202,7 @@ build_bladerf_cli() {
   deps=(
     libusb
     libtecla
+    ncurses
   )
 
   echo "  Installing dependencies..."
@@ -211,6 +221,9 @@ build_bladerf_cli() {
 
   echo "  Generating build..."
   cmake -S . -B build $CMAKE_GENERATE_ADDITIONAL_ARGS \
+        -Wno-dev \
+        -Wno-deprecated-declarations \
+        -Wno-unused-parameter \
         -DENABLE_LIBTECLA=ON \
         -DENABLE_BACKEND_LIBUSB=ON \
         -DCMAKE_INSTALL_PREFIX="$OUTPUT_DIR"
@@ -255,8 +268,16 @@ build_gr_iqbal() {
 
   rm -rf build/ && mkdir build 
 
+  local python_site_packages
+  python_site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
+
   echo "  Generating build..."
   cmake -S . -B build \
+        -Wno-dev \
+        -Wno-deprecated-declarations \
+        -Wno-unused-parameter \
+        -DGR_PYTHON_DIR="$python_site_packages" \
+        -DPYTHON_LIBRARY="$OUTPUT_DIR/lib/libgnuradio-runtime.dylib" \
         -DCMAKE_INSTALL_PREFIX="$OUTPUT_DIR"
 
   echo "  Building..."
@@ -264,15 +285,6 @@ build_gr_iqbal() {
 
   echo "  Installing..."
   cmake --install build
-
-  echo "  Applying fixes..."
-  # Some of the installed files should be relocated
-  local python_executable
-  python_site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
-
-  rm -rf "$python_site_packages/gnuradio/iqbalance"
-  mv "$OUTPUT_DIR/lib/python3.14/site-packages/gnuradio/iqbalance" "$python_site_packages/gnuradio/iqbalance"
-  rm -rf "$OUTPUT_DIR/lib/python3.14"
 }
 
 build_gr_osmosdr() {
@@ -280,7 +292,7 @@ build_gr_osmosdr() {
 
   cd "$GR_OSMOSDR_SOURCE_DIR"
 
-local python_deps
+  local python_deps
   python_deps=(
     six
     mako
@@ -304,10 +316,16 @@ local python_deps
   rm -rf build/ && mkdir build 
 
   local python_executable
+  local python_site_packages
   python_executable=$(which python)
+  python_site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
 
   echo "  Generating build..."
   cmake -S . -B build \
+        -Wno-dev \
+        -Wno-deprecated-declarations \
+        -Wno-unused-parameter \
+        -DGR_PYTHON_DIR="$python_site_packages" \
         -DQA_PYTHON_EXECUTABLE="$python_executable" \
         -DPYTHON_EXECUTABLE="$python_executable" \
         -DCMAKE_PREFIX_PATH="$OUTPUT_DIR/lib/cmake" \
@@ -318,15 +336,6 @@ local python_deps
 
   echo "  Installing..."
   cmake --install build
-
-  echo "  Applying fixes..."
-  # Some of the installed files should be relocated
-  local python_executable
-  python_site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
-
-  rm -rf "$python_site_packages/osmosdr"
-  mv "$OUTPUT_DIR/lib/python3.14/site-packages/osmosdr" "$python_site_packages/osmosdr"
-  rm -rf "$OUTPUT_DIR/lib/python3.14"
 }
 
 build_gr_bladerf() {
@@ -337,11 +346,16 @@ build_gr_bladerf() {
   rm -rf build/ && mkdir build 
 
   local python_executable
+  local python_executable
   python_executable=$(which python)
+  python_site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
 
   echo "  Generating build..."
   cmake -S . -B build \
-        -DPKG_CONFIG_PATH="$OUTPUT_DIR/lib/pkgconfig" \
+        -Wno-dev \
+        -Wno-deprecated-declarations \
+        -Wno-unused-parameter \
+        -DGR_PYTHON_DIR="$python_site_packages" \
         -DQA_PYTHON_EXECUTABLE="$python_executable" \
         -DPYTHON_EXECUTABLE="$python_executable" \
         -DCMAKE_PREFIX_PATH="$OUTPUT_DIR/lib/cmake" \
@@ -352,15 +366,6 @@ build_gr_bladerf() {
 
   echo "  Installing..."
   cmake --install build
-
-  echo "  Applying fixes..."
-  # Some of the installed files should be relocated
-  local python_executable
-  python_site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
-
-  rm -rf "$python_site_packages/bladeRF"
-  mv "$OUTPUT_DIR/lib/python3.14/site-packages/bladeRF" "$python_site_packages/bladeRF"
-  rm -rf "$OUTPUT_DIR/lib/python3.14"
 }
 
 build_bladerf_gnuradio_blocks() {
@@ -396,21 +401,21 @@ build_urh() {
     fi
   done
 
+  echo "  Applying patches..."
+  apply_patches "urh"
+
   echo "  Building..."
 
   rm -rf build/
+  rm -rf src/build/
   rm -rf var/
 
-  # Although nothing should reside here, let's just recreate it
-  rm -rf src/urh/dev/native/lib/shared
-  mkdir src/urh/dev/native/lib/shared/
-  ln -s "$OUTPUT_DIR"/lib/* src/urh/dev/native/lib/shared/
-  ln -s "$OUTPUT_DIR/include" src/urh/dev/native/lib/shared/include
-
   # Clean any previously generated cpp files
-  rm src/urh/dev/native/lib/*.cpp
+  rm -rf src/urh/dev/native/lib/*.cpp
 
-  DYLD_LIBRARY_PATH="$OUTPUT_DIR/lib" python setup.py --quiet install
+  BLADERF_INCDIR="$OUTPUT_DIR/include" \
+  BLADERF_LIBDIR="$OUTPUT_DIR/lib" \
+  python setup.py --quiet install
 }
 
 ensure_brew() {
@@ -470,22 +475,29 @@ ensure_python() {
   source "$PYTHON_VIRTUALENV_DIR/bin/activate"
 
   if command -v python3.14 >/dev/null 2>&1; then
-    echo "  Python 3.14 is installed: $(python3.14 --version)"
+    echo "  Python 3.14 is installed as python3: $(python3 --version)"
     return 0
   fi
 
-  # Fallback: user may only have "python3" but with version 3.14
-  if command -v python3 >/dev/null 2>&1; then
-    local ver
-    ver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")"
-    if [[ "$ver" == "3.14" ]]; then
-      echo "  Python 3.14 is installed as python3: $(python3 --version)"
-      return 0
-    fi
+  echo "  Python 3.14 virtualenv is not created."
+  exit 1
+}
+
+ensure_cmake() {
+  echo "Ensuring CMake is installed..."
+
+  if ! command -v cmake >/dev/null 2>&1; then
+    echo "  CMake is NOT installed or not in PATH"
+    exit 1
   fi
 
-  echo "  Python 3.14 is NOT installed."
-  exit 1
+  if ! cmake --version >/dev/null 2>&1; then
+    echo "  'cmake' command exists but cannot be executed properly"
+    exit 1
+  fi
+
+  echo "  CMake found: $(cmake --version | head -n1)"
+  return 0
 }
 
 clean_output_dir() {
@@ -498,6 +510,7 @@ main() {
   ensure_git
   ensure_brew
   ensure_python
+  ensure_cmake
   clean_output_dir
   build_gnu_radio
   build_bladerf_cli

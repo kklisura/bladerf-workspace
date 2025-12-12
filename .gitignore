@@ -33,5 +33,6 @@ Temporary Items
 # End of https://www.toptal.com/developers/gitignore/api/osx
 
 *.rbf
-python3.14/
+python3/
 output/
+var/

@@ -3,16 +3,16 @@
 	url = https://github.com/Nuand/bladeRF.git
 [submodule "gr-bladeRF"]
 	path = gr-bladeRF
-	url = git@github.com:Nuand/gr-bladeRF.git
+	url = https://github.com/Nuand/gr-bladeRF.git
 [submodule "gr-iqbal"]
 	path = gr-iqbal
-	url = git://git.osmocom.org/gr-iqbal
+	url = https://gitea.osmocom.org/sdr/gr-iqbal.git
 [submodule "gr-osmosdr"]
 	path = gr-osmosdr
 	url = https://gitea.osmocom.org/sdr/gr-osmosdr.git
 [submodule "gnuradio"]
 	path = gnuradio
-	url = git@github.com:gnuradio/gnuradio.git
+	url = https://github.com/gnuradio/gnuradio.git
 [submodule "urh"]
 	path = urh
-	url = git@github.com:jopohl/urh.git
+	url = https://github.com/jopohl/urh.git
